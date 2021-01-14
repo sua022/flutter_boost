@@ -8,24 +8,30 @@ import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
-import com.idlefish.flutterboost.interfaces.*;
+
+import com.idlefish.flutterboost.interfaces.IContainerManager;
+import com.idlefish.flutterboost.interfaces.IFlutterViewContainer;
+import com.idlefish.flutterboost.interfaces.INativeRouter;
+
+import java.io.Serializable;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
 import io.flutter.embedding.android.FlutterView;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterJNI;
 import io.flutter.embedding.engine.FlutterShellArgs;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.loader.FlutterLoader;
+import io.flutter.plugin.common.MethodChannel;
 import io.flutter.view.FlutterMain;
-
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
 
 public class FlutterBoost {
     private Platform mPlatform;
 
     private FlutterViewContainerManager mManager;
-    private FlutterEngine mEngine;
     private Activity mCurrentActiveActivity;
     private boolean mEnterActivityCreate =false;
     static FlutterBoost sInstance = null;
@@ -92,10 +98,13 @@ public class FlutterBoost {
                 if (mCurrentActiveActivity == null) {
                     Debuger.log("Application entry foreground");
 
-                    if (mEngine != null) {
-                        HashMap<String, String> map = new HashMap<>();
-                        map.put("type", "foreground");
-                        channel().sendEvent("lifecycle", map);
+                    Set<FlutterEngineInfo> allEngines = FlutterBoostEngineProvider.getInstance().getAllEngine();
+                    for (FlutterEngineInfo engine : allEngines) {
+                        if (engine != null) {
+                            HashMap<String, String> map = new HashMap<>();
+                            map.put("type", "foreground");
+                            sendEvent(engine.engineId, "lifecycle", map);
+                        }
                     }
                 }
                 mCurrentActiveActivity = activity;
@@ -124,10 +133,13 @@ public class FlutterBoost {
                 if (mCurrentActiveActivity == activity) {
                     Debuger.log("Application entry background");
 
-                    if (mEngine != null) {
-                        HashMap<String, String> map = new HashMap<>();
-                        map.put("type", "background");
-                        channel().sendEvent("lifecycle", map);
+                    Set<FlutterEngineInfo> allEngines = FlutterBoostEngineProvider.getInstance().getAllEngine();
+                    for (FlutterEngineInfo engine : allEngines) {
+                        if (engine != null) {
+                            HashMap<String, String> map = new HashMap<>();
+                            map.put("type", "background");
+                            sendEvent(engine.engineId, "lifecycle", map);
+                        }
                     }
                     mCurrentActiveActivity = null;
                 }
@@ -148,10 +160,13 @@ public class FlutterBoost {
                 if (mCurrentActiveActivity == activity) {
                     Debuger.log("Application entry background");
 
-                    if (mEngine != null) {
-                        HashMap<String, String> map = new HashMap<>();
-                        map.put("type", "background");
-                        channel().sendEvent("lifecycle", map);
+                    Set<FlutterEngineInfo> allEngines = FlutterBoostEngineProvider.getInstance().getAllEngine();
+                    for (FlutterEngineInfo engine : allEngines) {
+                        if (engine != null) {
+                            HashMap<String, String> map = new HashMap<>();
+                            map.put("type", "background");
+                            sendEvent(engine.engineId, "lifecycle", map);
+                        }
                     }
                     mCurrentActiveActivity = null;
                 }
@@ -169,30 +184,10 @@ public class FlutterBoost {
     }
 
     public void doInitialFlutter() {
-        if (mEngine != null) {
+        if (FlutterBoostEngineProvider.getInstance().getCachedEngine() != null) {
             return;
         }
-
-        if (mPlatform.lifecycleListener != null) {
-            mPlatform.lifecycleListener.beforeCreateEngine();
-        }
-        FlutterEngine flutterEngine = createEngine();
-        if (mPlatform.lifecycleListener != null) {
-            mPlatform.lifecycleListener.onEngineCreated();
-        }
-        if (flutterEngine.getDartExecutor().isExecutingDart()) {
-            return;
-        }
-
-        if (mPlatform.initialRoute() != null) {
-            flutterEngine.getNavigationChannel().setInitialRoute(mPlatform.initialRoute());
-        }
-        DartExecutor.DartEntrypoint entrypoint = new DartExecutor.DartEntrypoint(
-                FlutterMain.findAppBundlePath(),
-                mPlatform.dartEntrypoint()
-        );
-
-        flutterEngine.getDartExecutor().executeDartEntrypoint(entrypoint);
+        FlutterBoostEngineProvider.getInstance().getOrCreateCacheEngine();
     }
 
 
@@ -316,8 +311,20 @@ public class FlutterBoost {
         return sInstance.mPlatform;
     }
 
-    public FlutterBoostPlugin channel() {
-        return FlutterBoostPlugin.singleton();
+    public MethodChannel channel(String engineId) {
+        return FlutterBoostEngineProvider.getInstance().getFlutterEngineInfo(engineId).getMethodChannel();
+    }
+
+    public void sendEvent(String engineId, String name, Map args) {
+        FlutterBoostPlugin.sendEvent(FlutterBoostEngineProvider.getInstance().getFlutterEngineInfo(engineId).getMethodChannel(), name, args);
+    }
+
+    public void invokeMethodUnsafe(String engineId, String name, Serializable args) {
+        FlutterBoostPlugin.invokeMethodUnsafe(FlutterBoostEngineProvider.getInstance().getFlutterEngineInfo(engineId).getMethodChannel(), name, args);
+    }
+
+    public void invokeMethod(String engineId, String name, Serializable args) {
+        FlutterBoostPlugin.invokeMethod(FlutterBoostEngineProvider.getInstance().getFlutterEngineInfo(engineId).getMethodChannel(), name, args);
     }
 
     public Activity currentActivity() {
@@ -329,45 +336,22 @@ public class FlutterBoost {
     }
 
 
-    private FlutterEngine createEngine() {
-        if (mEngine == null) {
-            FlutterMain.startInitialization(mPlatform.getApplication());
-
-            FlutterShellArgs flutterShellArgs = new FlutterShellArgs(new String[0]);
-            FlutterMain.ensureInitializationComplete(
-                    mPlatform.getApplication().getApplicationContext(), flutterShellArgs.toArray());
-
-            mEngine = new FlutterEngine(mPlatform.getApplication().getApplicationContext(),FlutterLoader.getInstance(),new FlutterJNI(),null,false);
-            registerPlugins(mEngine);
-
-        }
-        return mEngine;
-
-    }
-
-    private void registerPlugins(FlutterEngine engine) {
-        try {
-            Class<?> generatedPluginRegistrant = Class.forName("io.flutter.plugins.GeneratedPluginRegistrant");
-            Method registrationMethod = generatedPluginRegistrant.getDeclaredMethod("registerWith", FlutterEngine.class);
-            registrationMethod.invoke(null, engine);
-        } catch (Exception e) {
-            Debuger.exception(e);
-        }
-    }
-
-    public FlutterEngine engineProvider() {
-        return mEngine;
+    public FlutterEngine getFlutterEngine(String engineId) {
+        return FlutterBoostEngineProvider.getInstance().getFlutterEngine(engineId);
     }
 
 
     public void boostDestroy() {
-        if (mEngine != null) {
-            mEngine.destroy();
+        Set<FlutterEngineInfo> allEngines = FlutterBoostEngineProvider.getInstance().getAllEngine();
+        for (FlutterEngineInfo engineInfo : allEngines) {
+            if (engineInfo.flutterEngine != null) {
+                engineInfo.flutterEngine.destroy();
+            }
         }
         if (mPlatform.lifecycleListener != null) {
             mPlatform.lifecycleListener.onEngineDestroy();
         }
-        mEngine = null;
+        FlutterBoostEngineProvider.getInstance().removeAllEngineInfo();
         mCurrentActiveActivity = null;
     }
 

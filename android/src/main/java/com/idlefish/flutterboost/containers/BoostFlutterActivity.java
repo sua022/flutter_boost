@@ -20,7 +20,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import android.view.*;
 import android.widget.*;
-import com.idlefish.flutterboost.FlutterBoost;
+
+import com.idlefish.flutterboost.FlutterBoostEngineProvider;
 import com.idlefish.flutterboost.XFlutterView;
 import com.idlefish.flutterboost.XPlatformPlugin;
 import io.flutter.Log;
@@ -34,6 +35,7 @@ import io.flutter.plugin.platform.PlatformPlugin;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class BoostFlutterActivity extends Activity
         implements FlutterActivityAndFragmentDelegate.Host,
@@ -50,8 +52,10 @@ public class BoostFlutterActivity extends Activity
     protected static final String EXTRA_BACKGROUND_MODE = "background_mode";
     protected static final String EXTRA_DESTROY_ENGINE_WITH_ACTIVITY = "destroy_engine_with_activity";
 
+
     protected static final String EXTRA_URL = "url";
     protected static final String EXTRA_PARAMS = "params";
+    protected static final String ARG_FLUTTER_ENGINE_ID = "flutter_engine_id";
 
 
     // Default configuration.
@@ -60,7 +64,7 @@ public class BoostFlutterActivity extends Activity
     private static XPlatformPlugin sXPlatformPlugin;
 
     public static Intent createDefaultIntent(@NonNull Context launchContext) {
-        return withNewEngine().build(launchContext);
+        return withCachedEngine().build(launchContext);
     }
 
 
@@ -74,6 +78,7 @@ public class BoostFlutterActivity extends Activity
         private String backgroundMode = DEFAULT_BACKGROUND_MODE;
         private String url = "";
         private Map params = new HashMap();
+        private String engineId;
 
 
         public NewEngineIntentBuilder(@NonNull Class<? extends BoostFlutterActivity> activityClass) {
@@ -92,6 +97,11 @@ public class BoostFlutterActivity extends Activity
             return this;
         }
 
+        public NewEngineIntentBuilder engineId(@NonNull String engineId) {
+            this.engineId = engineId;
+            return this;
+        }
+
 
         public NewEngineIntentBuilder backgroundMode(@NonNull BackgroundMode backgroundMode) {
             this.backgroundMode = backgroundMode.name();
@@ -104,11 +114,35 @@ public class BoostFlutterActivity extends Activity
             SerializableMap serializableMap = new SerializableMap();
             serializableMap.setMap(params);
 
+            if (engineId == null || engineId.length() == 0) {
+                engineId = UUID.randomUUID().toString();
+            }
+
             return new Intent(context, activityClass)
                     .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode)
                     .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, false)
                     .putExtra(EXTRA_URL, url)
+                    .putExtra(ARG_FLUTTER_ENGINE_ID, engineId)
                     .putExtra(EXTRA_PARAMS, serializableMap);
+        }
+    }
+
+    @NonNull
+    public static CachedEngineFragmentBuilder withCachedEngine() {
+        return new CachedEngineFragmentBuilder(BoostFlutterActivity.class);
+    }
+
+    public static class CachedEngineFragmentBuilder extends NewEngineIntentBuilder {
+
+        public CachedEngineFragmentBuilder(@NonNull Class<? extends BoostFlutterActivity> activityClass) {
+            super(activityClass);
+            engineId(FlutterBoostEngineProvider.CACHE_ENGINE_ID);
+        }
+
+        @Override
+        public NewEngineIntentBuilder engineId(@NonNull String engineId) {
+            // do nothing
+            return this;
         }
     }
 
@@ -428,8 +462,7 @@ public class BoostFlutterActivity extends Activity
     @Nullable
     @Override
     public FlutterEngine provideFlutterEngine(@NonNull Context context) {
-        // No-op. Hook for subclasses.
-        return FlutterBoost.instance().engineProvider();
+        return FlutterBoostEngineProvider.getInstance().getOrCreateEngine(getEngineId());
     }
 
     /**
@@ -490,6 +523,14 @@ public class BoostFlutterActivity extends Activity
         Map<String, String> params = new HashMap<>();
 
         return params;
+    }
+
+    @Override
+    public String getEngineId() {
+        if (getIntent().hasExtra(ARG_FLUTTER_ENGINE_ID)) {
+            return getIntent().getStringExtra(ARG_FLUTTER_ENGINE_ID);
+        }
+        return "";
     }
 
     /**

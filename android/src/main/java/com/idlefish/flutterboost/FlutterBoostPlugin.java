@@ -16,6 +16,8 @@ import io.flutter.plugin.common.PluginRegistry;
 
 public class FlutterBoostPlugin {
 
+    public static final String CHANNEL_NAME = "flutter_boost";
+
     private static FlutterBoostPlugin sInstance;
 
     private final MethodChannel mMethodChannel;
@@ -53,7 +55,7 @@ public class FlutterBoostPlugin {
     }
 
     private FlutterBoostPlugin(PluginRegistry.Registrar registrar) {
-        mMethodChannel = new MethodChannel(registrar.messenger(), "flutter_boost");
+        mMethodChannel = new MethodChannel(registrar.messenger(), CHANNEL_NAME);
 
         mMethodChannel.setMethodCallHandler(new MethodChannel.MethodCallHandler() {
             @Override
@@ -93,8 +95,8 @@ public class FlutterBoostPlugin {
 
     }
 
-    public void invokeMethodUnsafe(final String name, Serializable args) {
-        invokeMethod(name, args, new MethodChannel.Result() {
+    public static void invokeMethodUnsafe(MethodChannel channel, final String name, Serializable args) {
+        invokeMethod(channel, name, args, new MethodChannel.Result() {
             @Override
             public void success(@Nullable Object o) {
                 //every thing ok...
@@ -112,8 +114,12 @@ public class FlutterBoostPlugin {
         });
     }
 
-    public void invokeMethod(final String name, Serializable args) {
-        invokeMethod(name, args, new MethodChannel.Result() {
+    public void invokeMethodUnsafe(final String name, Serializable args) {
+        invokeMethodUnsafe(mMethodChannel, name, args);
+    }
+
+    public static void invokeMethod(MethodChannel channel, final String name, Serializable args) {
+        invokeMethod(channel, name, args, new MethodChannel.Result() {
             @Override
             public void success(@Nullable Object o) {
                 //every thing ok...
@@ -131,12 +137,20 @@ public class FlutterBoostPlugin {
         });
     }
 
+    public void invokeMethod(final String name, Serializable args) {
+        invokeMethod(mMethodChannel, name, args);
+    }
+
     public void invokeMethod(final String name, Serializable args, MethodChannel.Result result) {
+        invokeMethod(mMethodChannel, name, args, result);
+    }
+
+    public static void invokeMethod(MethodChannel channel, final String name, Serializable args, MethodChannel.Result result) {
         if ("__event__".equals(name)) {
             Debuger.exception("method name should not be __event__");
         }
 
-        mMethodChannel.invokeMethod(name, args, result);
+        channel.invokeMethod(name, args, result);
     }
 
     public void addMethodCallHandler(MethodChannel.MethodCallHandler handler) {
@@ -171,10 +185,14 @@ public class FlutterBoostPlugin {
     }
 
     public void sendEvent(String name, Map args) {
+        sendEvent(mMethodChannel, name, args);
+    }
+
+    public static void sendEvent(MethodChannel channel, String name, Map args) {
         Map event = new HashMap();
         event.put("name", name);
         event.put("arguments", args);
-        mMethodChannel.invokeMethod("__event__", event);
+        channel.invokeMethod("__event__", event);
     }
 
     public interface EventListener {

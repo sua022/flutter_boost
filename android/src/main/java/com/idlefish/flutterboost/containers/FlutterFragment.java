@@ -1,7 +1,6 @@
 package com.idlefish.flutterboost.containers;
 
 import android.app.Activity;
-import android.graphics.Color;
 import android.view.*;
 import androidx.lifecycle.Lifecycle;
 import android.content.Context;
@@ -13,7 +12,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 
-import com.idlefish.flutterboost.FlutterBoost;
+import com.idlefish.flutterboost.FlutterBoostEngineProvider;
 import com.idlefish.flutterboost.XFlutterView;
 import com.idlefish.flutterboost.XPlatformPlugin;
 import io.flutter.embedding.android.*;
@@ -22,6 +21,7 @@ import io.flutter.embedding.engine.FlutterShellArgs;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 
 public class FlutterFragment extends Fragment implements FlutterActivityAndFragmentDelegate.Host {
@@ -69,6 +69,8 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
      */
     protected static final String ARG_DESTROY_ENGINE_WITH_FRAGMENT = "destroy_engine_with_fragment";
 
+    protected static final String ARG_FLUTTER_ENGINE_ID = "flutter_engine_id";
+
 
     protected static final String EXTRA_URL = "url";
     protected static final String EXTRA_PARAMS = "params";
@@ -92,7 +94,7 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
      */
     @NonNull
     public static FlutterFragment createDefault() {
-        return new NewEngineFragmentBuilder().build();
+        return new CachedEngineFragmentBuilder().build();
     }
 
     /**
@@ -114,6 +116,7 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
         private boolean shouldAttachEngineToActivity = true;
         private String url = "";
         private Map params = new HashMap();
+        private String engineId;
 
         /**
          * Constructs a {@code NewEngineFragmentBuilder} that is configured to construct an instance of
@@ -166,6 +169,11 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
             return this;
         }
 
+        public NewEngineFragmentBuilder engineId(@NonNull String engineId) {
+            this.engineId = engineId;
+            return this;
+        }
+
         /**
          * Support a {@link FlutterView.TransparencyMode#transparent} background within {@link FlutterView},
          * or force an {@link FlutterView.TransparencyMode#opaque} background.
@@ -196,6 +204,7 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
             args.putString(ARG_FLUTTERVIEW_RENDER_MODE, renderMode != null ? renderMode.name() : FlutterView.RenderMode.surface.name());
             args.putString(ARG_FLUTTERVIEW_TRANSPARENCY_MODE, transparencyMode != null ? transparencyMode.name() : FlutterView.TransparencyMode.transparent.name());
             args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
+            args.putString(ARG_FLUTTER_ENGINE_ID, engineId);
 
 
             return args;
@@ -215,6 +224,10 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
                             + fragmentClass.getCanonicalName() + ") does not match the expected return type.");
                 }
 
+                if (engineId == null || engineId.length() == 0) {
+                    engineId = UUID.randomUUID().toString();
+                }
+
                 Bundle args = createArgs();
                 frag.setArguments(args);
 
@@ -222,6 +235,27 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
             } catch (Exception e) {
                 throw new RuntimeException("Could not instantiate NewFlutterFragment subclass (" + fragmentClass.getName() + ")", e);
             }
+        }
+    }
+    @NonNull
+    public static CachedEngineFragmentBuilder withCachedEngine() {
+        return new CachedEngineFragmentBuilder();
+    }
+
+    public static class CachedEngineFragmentBuilder extends NewEngineFragmentBuilder {
+        public CachedEngineFragmentBuilder() {
+            engineId(FlutterBoostEngineProvider.CACHE_ENGINE_ID);
+        }
+
+        public CachedEngineFragmentBuilder(@NonNull Class<? extends FlutterFragment> subclass) {
+            super(subclass);
+            engineId(FlutterBoostEngineProvider.CACHE_ENGINE_ID);
+        }
+
+        @Override
+        public CachedEngineFragmentBuilder engineId(@NonNull String engineId) {
+            // do nothing
+            return this;
         }
     }
 
@@ -451,8 +485,7 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
     @Override
     @Nullable
     public FlutterEngine provideFlutterEngine(@NonNull Context context) {
-
-        return FlutterBoost.instance().engineProvider();
+        return FlutterBoostEngineProvider.getInstance().getOrCreateEngine(getEngineId());
     }
 
     /**
@@ -514,10 +547,12 @@ public class FlutterFragment extends Fragment implements FlutterActivityAndFragm
 
     @Override
     public String getContainerUrl() {
-
         return getArguments().getString(EXTRA_URL);
+    }
 
-
+    @Override
+    public String getEngineId() {
+        return getArguments().getString(ARG_FLUTTER_ENGINE_ID);
     }
 
     @Override

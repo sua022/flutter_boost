@@ -21,6 +21,7 @@ import java.util.Map;
 
 
 import com.idlefish.flutterboost.FlutterBoost;
+import com.idlefish.flutterboost.FlutterBoostEngineProvider;
 import com.idlefish.flutterboost.Utils;
 import com.idlefish.flutterboost.XFlutterView;
 import com.idlefish.flutterboost.XPlatformPlugin;
@@ -219,6 +220,8 @@ public class FlutterActivityAndFragmentDelegate implements IFlutterViewContainer
         ensureAlive();
 
         flutterView.release();
+
+        FlutterBoostEngineProvider.getInstance().removeFlutterEngineInfo(getEngineId());
     }
 
 
@@ -396,6 +399,11 @@ public class FlutterActivityAndFragmentDelegate implements IFlutterViewContainer
     }
 
     @Override
+    public String getEngineId() {
+        return this.host.getEngineId();
+    }
+
+    @Override
     public void onContainerShown() {
 
     }
@@ -479,6 +487,7 @@ public class FlutterActivityAndFragmentDelegate implements IFlutterViewContainer
          */
         boolean shouldAttachEngineToActivity();
 
+        String getEngineId();
 
         String getContainerUrl();
 

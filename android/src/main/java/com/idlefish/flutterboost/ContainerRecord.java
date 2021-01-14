@@ -154,7 +154,7 @@ public class ContainerRecord implements IContainerRecord {
         map.put("name", mContainer.getContainerUrl());
         map.put("uniqueId", mUniqueId);
 
-        FlutterBoost.instance().channel().sendEvent("lifecycle", map);
+        FlutterBoost.instance().sendEvent(getContainer().getEngineId(), "lifecycle", map);
 
 //        mContainer.getBoostFlutterView().onBackPressed();
     }
@@ -253,7 +253,7 @@ public class ContainerRecord implements IContainerRecord {
             args.put("pageName", url);
             args.put("params", params);
             args.put("uniqueId", uniqueId);
-            FlutterBoost.instance().channel().invokeMethod(method, args);
+            FlutterBoost.instance().invokeMethod(getContainer().getEngineId(), method, args);
         }
 
         public void invokeChannelUnsafe(String method, String url, Map params, String uniqueId) {
@@ -261,7 +261,7 @@ public class ContainerRecord implements IContainerRecord {
             args.put("pageName", url);
             args.put("params", params);
             args.put("uniqueId", uniqueId);
-            FlutterBoost.instance().channel().invokeMethodUnsafe(method, args);
+            FlutterBoost.instance().invokeMethodUnsafe(getContainer().getEngineId(), method, args);
         }
     }
 

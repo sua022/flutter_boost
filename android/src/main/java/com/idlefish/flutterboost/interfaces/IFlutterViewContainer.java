@@ -54,6 +54,8 @@ public interface IFlutterViewContainer {
      */
     String getContainerUrl();
 
+    String getEngineId();
+
     /**
      * container params
      * @return

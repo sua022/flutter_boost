@@ -26,7 +26,6 @@ import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
  */
 public class FlutterSplashView extends FrameLayout {
     private static String TAG = "FlutterSplashView";
-    private FlutterEngine mFlutterEngine;
 
     @Nullable
     private SplashScreen splashScreen;
@@ -40,6 +39,8 @@ public class FlutterSplashView extends FrameLayout {
     private String transitioningIsolateId;
     @Nullable
     private String previousCompletedSplashIsolate;
+
+    private String flutterEngineId;
 
     private Handler handler = new Handler();
 
@@ -93,9 +94,10 @@ public class FlutterSplashView extends FrameLayout {
         super(context, attrs, defStyleAttr);
 
         setSaveEnabled(true);
-        if (mFlutterEngine == null) {
-            mFlutterEngine = FlutterBoost.instance().engineProvider();
-        }
+    }
+
+    public void setFlutterEngineId(String flutterEngineId) {
+        this.flutterEngineId = flutterEngineId;
     }
 
     /**
@@ -185,7 +187,7 @@ public class FlutterSplashView extends FrameLayout {
     public void onAttach() {
         Debuger.log("BoostFlutterView onAttach");
 
-        flutterView.attachToFlutterEngine(mFlutterEngine);
+        flutterView.attachToFlutterEngine(FlutterBoostEngineProvider.getInstance().getOrCreateEngine(flutterEngineId));
 
     }
 
